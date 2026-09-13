@@ -4,10 +4,21 @@ import torch.nn.functional as F
 
 
 def _sym_normalize(adj: torch.Tensor) -> torch.Tensor:
+    if adj.is_sparse:
+        indices = adj.indices()
+        inv = _inv_sqrt_deg(adj)
+        vals = adj.values() * inv[indices[0]] * inv[indices[1]]
+        return torch.sparse_coo_tensor(indices, vals, adj.shape).coalesce()
     a = adj + torch.eye(adj.shape[0], device=adj.device, dtype=adj.dtype)
-    deg = a.sum(dim=1)
-    inv = torch.where(deg > 0, deg.pow(-0.5), torch.zeros_like(deg))
-    return inv[:, None] * a * inv[None, :]
+    return _inv_sqrt_deg(a)[:, None] * a * _inv_sqrt_deg(a)[None, :]
+
+
+def _inv_sqrt_deg(a) -> torch.Tensor:
+    if a.is_sparse:
+        deg = torch.sparse.sum(a, dim=1).to_dense()
+    else:
+        deg = a.sum(dim=1)
+    return torch.where(deg > 0, deg.pow(-0.5), torch.zeros_like(deg))
 
 
 class GCNConv(nn.Module):

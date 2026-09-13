@@ -2,7 +2,7 @@ import pickle
 
 import torch
 
-from neurobpf.gnn.dataset import load_pickled_graphs, make_adj
+from neurobpf.gnn.dataset import load_pickled_graphs, make_adj, make_sparse_adj
 from neurobpf.gnn.features import snapshot_to_graph
 from neurobpf.graphbuilder import EdgeData, NodeData, Snapshot
 
@@ -41,6 +41,27 @@ def test_make_adj_symmetrizes_duplicates():
     adj = make_adj(g)
     assert adj[0, 1].item() == 1.0
     assert adj[1, 0].item() == 1.0
+
+
+def test_make_sparse_adj_is_coo_symmetric_binary():
+    g = snapshot_to_graph(_snapshot())
+    adj = make_sparse_adj(g)
+    assert adj.is_sparse
+    dense = adj.to_dense()
+    assert dense.shape == (2, 2)
+    assert dense[0, 1].item() == 1.0
+    assert dense[1, 0].item() == 1.0
+    assert torch.allclose(dense, dense.T)
+    assert set(dense.unique().tolist()) <= {0.0, 1.0}
+
+
+def test_make_sparse_adj_self_loops_flag():
+    g = snapshot_to_graph(_snapshot())
+    no = make_sparse_adj(g, self_loops=False).to_dense()
+    assert no[0, 0].item() == 0.0
+    yes = make_sparse_adj(g, self_loops=True).to_dense()
+    assert yes[0, 0].item() == 1.0
+    assert yes[1, 1].item() == 1.0
 
 
 def test_load_pickled_graphs_roundtrip(tmp_path):

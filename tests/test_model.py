@@ -101,3 +101,23 @@ def test_forward_shape_and_decode_symmetric():
     assert logits.shape == (5, 5)
     assert torch.allclose(logits, logits.T, atol=1e-5)
     assert model.forward(x, adj).shape == (5, 8)
+
+
+def test_gcn_forward_sparse_matches_dense():
+    from neurobpf.gnn.dataset import make_adj, make_sparse_adj
+    from neurobpf.gnn.features import snapshot_to_graph
+    from neurobpf.graphbuilder import EdgeData, NodeData, Snapshot
+
+    nodes = {"hub": NodeData(node_id="hub", kind="process", label="hub", uid=1000, pid=1)}
+    edges = []
+    for k in range(4):
+        nid = f"leaf{k}"
+        nodes[nid] = NodeData(node_id=nid, kind="process", label=nid, uid=1000, pid=k + 2)
+        edges.append(EdgeData(src="hub", dst=nid, label="EXEC", ts=1.0))
+    g = snapshot_to_graph(Snapshot(0.0, nodes, edges, set()), 0)
+    model = GAE(in_dim=FEAT_DIM, hidden_dim=8, z_dim=8)
+    model.eval()
+    with torch.no_grad():
+        z_dense = model.encode(g.x, make_adj(g))
+        z_sparse = model.encode(g.x, make_sparse_adj(g))
+    assert torch.allclose(z_dense, z_sparse, atol=1e-5)

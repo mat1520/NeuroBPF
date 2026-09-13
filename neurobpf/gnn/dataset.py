@@ -15,6 +15,18 @@ def make_adj(g: GraphTensor) -> torch.Tensor:
     return adj
 
 
+def make_sparse_adj(g: GraphTensor, self_loops: bool = True) -> torch.Tensor:
+    n = g.x.shape[0]
+    src = g.edge_index[0]
+    dst = g.edge_index[1]
+    both = [torch.stack([src, dst]), torch.stack([dst, src])]
+    if self_loops:
+        both.append(torch.stack([torch.arange(n), torch.arange(n)]))
+    idx = torch.unique(torch.cat(both, dim=1), dim=1)
+    vals = torch.ones(idx.shape[1], dtype=torch.float32)
+    return torch.sparse_coo_tensor(idx, vals, (n, n)).coalesce()
+
+
 def load_pickled_graphs(path: Path):
     with Path(path).open("rb") as fh:
         data = pickle.load(fh)
