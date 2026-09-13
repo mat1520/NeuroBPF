@@ -124,6 +124,20 @@ def test_evaluate_single_class_auc_safe():
     assert res["auc_roc"] == 1.0
 
 
+def test_annotate_global_shift_not_flagged_as_anomalous():
+    g = _graph(
+        [[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 4,
+        [[0, 1], [1, 2]],
+        ["a", "b", "c", "d"],
+        [False, False, True, False],
+        0,
+    )
+    model = FakeModel([[100.0, 100.0, 300.0, 100.0]])
+    out = annotate(model, [g], ["r0"], ["attack"], 1.0)
+    flag = [n["anomalous"] for n in out[0]["snapshots"][0]["nodes"]]
+    assert flag == [False, False, True, False]
+
+
 def test_annotate_shape_and_normalization():
     graphs, scores = _eval_inputs()
     model = _fake_model_for(graphs, scores)

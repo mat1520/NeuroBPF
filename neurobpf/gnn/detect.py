@@ -91,7 +91,7 @@ def _label_from_id(nid):
     return nid
 
 
-def _annotated_node(g, i, score, raw, threshold):
+def _annotated_node(g, i, score, zscore, threshold):
     nid = g.node_ids[i]
     if g.node_labels:
         label = g.node_labels[i]
@@ -106,7 +106,7 @@ def _annotated_node(g, i, score, raw, threshold):
         "label": label,
         "kind": kind,
         "score": float(score),
-        "anomalous": bool(float(raw) > threshold),
+        "anomalous": bool(float(zscore) > threshold),
     }
 
 
@@ -114,13 +114,14 @@ def annotate(model, graphs, run_ids, run_types, threshold):
     out = []
     for gi, g in enumerate(graphs):
         raw = node_anomaly_scores(model, g)
+        zscores = _standardize(raw)
         lo = float(raw.min())
         hi = float(raw.max())
         span = hi - lo if hi > lo else 1.0
         scores = (raw - lo) / span
         nodes = []
         for i in range(len(g.node_ids)):
-            nodes.append(_annotated_node(g, i, scores[i], raw[i], threshold))
+            nodes.append(_annotated_node(g, i, scores[i], zscores[i], threshold))
         edges = []
         src, dst = g.edge_index
         for k in range(src.shape[0]):

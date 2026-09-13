@@ -49,14 +49,17 @@ def test_train_seed_coverage_or_single_graph():
 def test_compute_threshold_percentile():
     _, _, graphs = _models()
     model = train_gae(graphs, hidden_dim=8, z_dim=8, epochs=30, seed=0)
-    scores = []
+    import numpy as np
+
+    zscores = []
     for g in graphs:
         with torch.no_grad():
-            s = model.node_scores(g.x, make_adj(g)).flatten().tolist()
-        scores.extend(s)
+            s = model.node_scores(g.x, make_adj(g)).flatten()
+            zscores.append(((s - s.mean()) / (s.std() + 1e-12)).numpy())
+    pooled = np.concatenate(zscores)
     thr = compute_threshold(model, graphs, percentile=50.0)
     assert isinstance(thr, float)
-    assert min(scores) <= thr <= max(scores)
+    assert abs(thr - float(np.percentile(pooled, 50.0))) < 1e-4
 
 
 def test_save_load_model_roundtrip(tmp_path):

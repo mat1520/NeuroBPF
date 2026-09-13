@@ -56,8 +56,12 @@ def compute_threshold(model, normal_graphs, percentile=99.0):
     scores = []
     model.eval()
     for g in normal_graphs:
-        s = node_scores_of(model, g).flatten().tolist()
-        scores.extend(s)
+        s = node_scores_of(model, g).flatten()
+        std = s.std().item()
+        if std < 1e-12:
+            continue
+        z = ((s - s.mean()) / std).tolist()
+        scores.extend(z)
     if not scores:
         return 0.0
     return float(np.percentile(scores, percentile))
