@@ -111,8 +111,13 @@ def _annotated_node(g, i, score, zscore, threshold):
 
 
 def annotate(model, graphs, run_ids, run_types, threshold):
-    out = []
+    runs = {}
     for gi, g in enumerate(graphs):
+        rid = run_ids[gi]
+        entry = runs.get(rid)
+        if entry is None:
+            entry = {"run_id": rid, "run_type": run_types[gi], "snapshots": []}
+            runs[rid] = entry
         raw = node_anomaly_scores(model, g)
         zscores = _standardize(raw)
         lo = float(raw.min())
@@ -133,10 +138,5 @@ def annotate(model, graphs, run_ids, run_types, threshold):
                 }
             )
         ts = getattr(g, "ts", 0.0)
-        entry = {
-            "run_id": run_ids[gi],
-            "run_type": run_types[gi],
-            "snapshots": [{"ts": ts, "nodes": nodes, "edges": edges}],
-        }
-        out.append(entry)
-    return out
+        entry["snapshots"].append({"ts": ts, "nodes": nodes, "edges": edges})
+    return list(runs.values())

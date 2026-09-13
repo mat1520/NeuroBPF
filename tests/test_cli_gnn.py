@@ -63,11 +63,13 @@ def test_annotate_subcommand_writes_per_run(tmp_path):
     files = sorted(p.name for p in out_dir.glob("*.json"))
     with pkl.open("rb") as fh:
         data = pickle.load(fh)
-    assert len(files) == len(data["run_ids"])
-    for rid in data["run_ids"]:
+    assert len(files) == len(set(data["run_ids"]))
+    for rid in set(data["run_ids"]):
         entry = json.loads((out_dir / f"{rid}.json").read_text())
         assert set(entry) == {"run_id", "run_type", "snapshots"}
         assert entry["run_id"] == rid
+        assert len(entry["snapshots"]) >= 1
+        assert all("nodes" in s and "edges" in s for s in entry["snapshots"])
 
 
 def test_demo_prints_auc_line_and_writes_files(tmp_path, capsys):

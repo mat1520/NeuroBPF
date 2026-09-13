@@ -25,9 +25,10 @@ class GraphTensor:
     node_labels: list[str] = field(default_factory=list)
     node_kinds: list[str] = field(default_factory=list)
     ts: float = 0.0
+    run_id: str = ""
 
 
-def snapshot_to_graph(snap: Snapshot, snapshot_id: int = 0) -> GraphTensor:
+def snapshot_to_graph(snap: Snapshot, snapshot_id: int = 0, run_id: str = "") -> GraphTensor:
     node_ids = list(snap.nodes)
     index = {nid: i for i, nid in enumerate(node_ids)}
     n = len(node_ids)
@@ -71,4 +72,5 @@ def snapshot_to_graph(snap: Snapshot, snapshot_id: int = 0) -> GraphTensor:
         node_labels=[snap.nodes[nid].label for nid in node_ids],
         node_kinds=[snap.nodes[nid].kind for nid in node_ids],
         ts=snap.window_start,
+        run_id=run_id,
     )

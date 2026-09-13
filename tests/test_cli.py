@@ -4,7 +4,7 @@ import subprocess
 import sys
 
 from neurobpf.cli import main
-from neurobpf.events import Event, write_events
+from neurobpf.events import Event, event_to_json, write_events
 from neurobpf.graphbuilder import Snapshot
 from neurobpf.scenarios import ATTACKS
 
@@ -51,17 +51,20 @@ def test_build_pickle_keys_types_and_order(tmp_path):
         data = pickle.load(fh)
     assert set(data) == {"snapshots", "run_types", "run_ids"}
     n = len(data["snapshots"])
-    assert n == 2 + 5 * 1
+    assert n >= 2 + 5 * 1
     assert len(data["run_types"]) == n
     assert len(data["run_ids"]) == n
     assert all(isinstance(s, Snapshot) for s in data["snapshots"])
-    assert sorted(data["run_ids"]) == data["run_ids"]
-    assert data["run_types"].count("normal") == 2
+    distinct = list(dict.fromkeys(data["run_ids"]))
+    assert distinct == sorted(distinct)
+    assert data["run_types"].count("normal") >= 2
     attack_types = [t for t in data["run_types"] if t == "attack"]
-    assert len(attack_types) == 5
-    for i, rid in enumerate(data["run_ids"]):
+    assert len(attack_types) >= 5
+    assert len(set(data["run_ids"])) == 2 + 5
+    for rid in set(data["run_ids"]):
         labels = json.loads((out / "3" / f"{rid}.labels.json").read_text())
-        assert data["run_types"][i] == labels["run_type"]
+        idx = data["run_ids"].index(rid)
+        assert data["run_types"][idx] == labels["run_type"]
 
 
 def test_build_last_snapshot_is_cumulative_full_run(tmp_path):
@@ -89,6 +92,39 @@ def test_build_missing_labels_assumes_real(tmp_path):
     assert data["run_types"] == ["real"]
     assert data["run_ids"] == ["foo"]
     assert data["snapshots"][0].malicious == set()
+
+
+def test_build_keeps_all_temporal_windows(tmp_path):
+    import neurobpf.cli as cli
+
+    evs_dir = tmp_path / "events"
+    evs_dir.mkdir()
+    events = []
+    for i in range(3):
+        e = Event(
+            ts=float(i) * 1.0,
+            event="file_read",
+            pid=1,
+            comm="bash",
+            uid=1000,
+            ppid=0,
+            target=f"/f{i}",
+        )
+        events.append(e)
+    for run in ("normal_0", "normal_1"):
+        (evs_dir / f"{run}.events.ndjson").write_text(
+            "\n".join(event_to_json(e).rstrip("\n") for e in events) + "\n"
+        )
+        (evs_dir / f"{run}.labels.json").write_text(
+            json.dumps({"run_type": "normal", "malicious_pids": []})
+        )
+    out = tmp_path / "g.pkl"
+    cli._build_pickle(evs_dir, out, window=2.0)
+    data = pickle.load(open(out, "rb"))
+    assert len(data["run_ids"]) == len(data["snapshots"])
+    assert data["run_ids"][0] == "normal_0"
+    assert data["snapshots"][0].window_start == 0.0
+    assert data["run_ids"].count("normal_0") >= 2
 
 
 def test_module_entry_generate(tmp_path):

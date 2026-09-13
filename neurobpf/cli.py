@@ -23,7 +23,7 @@ def _cmd_generate(args):
     )
 
 
-def _build_pickle(events_dir, out_path):
+def _build_pickle(events_dir, out_path, window=5.0):
     run_paths = sorted(Path(events_dir).rglob("*.events.ndjson"))
     snapshots = []
     run_types = []
@@ -38,9 +38,11 @@ def _build_pickle(events_dir, out_path):
         else:
             run_type = "real"
             malicious = set()
-        snapshots.append(build_snapshots(events, malicious_pids=malicious)[-1])
-        run_types.append(run_type)
-        run_ids.append(path.name.replace(".events.ndjson", ""))
+        run_id = path.name.replace(".events.ndjson", "")
+        for snap in build_snapshots(events, window=window, malicious_pids=malicious):
+            snapshots.append(snap)
+            run_types.append(run_type)
+            run_ids.append(run_id)
     data = {"snapshots": snapshots, "run_types": run_types, "run_ids": run_ids}
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)

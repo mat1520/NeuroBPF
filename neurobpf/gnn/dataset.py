@@ -31,7 +31,8 @@ def load_pickled_graphs(path: Path):
     with Path(path).open("rb") as fh:
         data = pickle.load(fh)
     graphs = [
-        snapshot_to_graph(snap, i) for i, snap in enumerate(data["snapshots"])
+        snapshot_to_graph(snap, i, run_id)
+        for i, (snap, run_id) in enumerate(zip(data["snapshots"], data["run_ids"]))
     ]
     return graphs, data["run_types"], data["run_ids"]
 
