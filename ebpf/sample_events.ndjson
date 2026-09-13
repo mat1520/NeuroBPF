@@ -1,0 +1,6 @@
+{"ts":1700000000.123,"event":"process_start","pid":2001,"ppid":1000,"comm":"bash","exe_path":"/usr/bin/bash","uid":1000,"target_type":null,"target":null,"result":0}
+{"ts":1700000001.456,"event":"net_connect","pid":2002,"ppid":2001,"comm":"curl","exe_path":"","uid":1000,"target_type":"net","target":"10.0.0.5:4444","result":0}
+{"ts":1700000002.000,"event":"net_accept","pid":1122,"ppid":1,"comm":"sshd","exe_path":"","uid":0,"target_type":"net","target":"192.168.1.10:52314","result":0}
+{"ts":1700000003.111,"event":"file_read","pid":2003,"ppid":2001,"comm":"cat","exe_path":"","uid":1000,"target_type":"file","target":"/etc/passwd","result":0}
+{"ts":1700000004.222,"event":"file_write","pid":2004,"ppid":2001,"comm":"sh","exe_path":"","uid":1000,"target_type":"file","target":"/tmp/.payload","result":0}
+{"ts":1700000005.333,"event":"process_exit","pid":2004,"ppid":2001,"comm":"sh","exe_path":"","uid":1000,"target_type":null,"target":null,"result":0}

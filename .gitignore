@@ -8,3 +8,7 @@ web/node_modules/
 web/dist/
 *.egg-info/
 .pytest_cache/
+ebpf/collector
+ebpf/vmlinux.h
+ebpf/*.skel.h
+ebpf/*.o
