@@ -10,6 +10,7 @@ from neurobpf.gnn.model import GAE
 
 def train_gae(
     train_graphs,
+    val_graphs=None,
     hidden_dim=64,
     z_dim=64,
     epochs=150,
@@ -34,18 +35,20 @@ def train_gae(
             loss.backward()
             optimizer.step()
             total += loss.item()
-        model.eval()
-        with torch.no_grad():
-            val_adj = make_adj(train_graphs[-1])
-            val_loss = model.train_loss(train_graphs[-1].x, val_adj).item()
-        if best_loss is None or val_loss < best_loss:
-            best_loss = val_loss
-            best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
-            stalled = 0
-        else:
-            stalled += 1
-            if stalled >= patience:
-                break
+        if val_graphs:
+            model.eval()
+            num = 0.0
+            with torch.no_grad():
+                for g in val_graphs:
+                    num += model.train_loss(g.x, make_adj(g)).item()
+            if best_loss is None or num < best_loss:
+                best_loss = num
+                best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
+                stalled = 0
+            else:
+                stalled += 1
+                if stalled >= patience:
+                    break
     if best_state is not None:
         model.load_state_dict(best_state)
     model.eval()

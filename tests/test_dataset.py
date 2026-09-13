@@ -2,7 +2,12 @@ import pickle
 
 import torch
 
-from neurobpf.gnn.dataset import load_pickled_graphs, make_adj, make_sparse_adj
+from neurobpf.gnn.dataset import (
+    load_pickled_graphs,
+    make_adj,
+    make_sparse_adj,
+    split_by_run,
+)
 from neurobpf.gnn.features import snapshot_to_graph
 from neurobpf.graphbuilder import EdgeData, NodeData, Snapshot
 
@@ -62,6 +67,29 @@ def test_make_sparse_adj_self_loops_flag():
     yes = make_sparse_adj(g, self_loops=True).to_dense()
     assert yes[0, 0].item() == 1.0
     assert yes[1, 1].item() == 1.0
+
+
+def _windows_runs():
+    graphs = []
+    for r in range(6):
+        snap = _snapshot()
+        for w in range(3):
+            g = snapshot_to_graph(snap, r * 3 + w, run_id=f"run{r}")
+            graphs.append(g)
+    return graphs
+
+
+def test_split_by_run_no_mixed_runs():
+    graphs = _windows_runs()
+    train, val, test = split_by_run(graphs, train_frac=0.5, val_frac=0.25, seed=0)
+    tr_ids = {g.run_id for g in train}
+    va_ids = {g.run_id for g in val}
+    te_ids = {g.run_id for g in test}
+    assert tr_ids & va_ids == set()
+    assert tr_ids & te_ids == set()
+    assert va_ids & te_ids == set()
+    assert all(g.run_id in tr_ids for g in train)
+    assert len(set.union(tr_ids, va_ids, te_ids)) == 6
 
 
 def test_load_pickled_graphs_roundtrip(tmp_path):

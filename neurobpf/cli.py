@@ -4,7 +4,7 @@ import pickle
 from pathlib import Path
 
 from neurobpf.events import read_events
-from neurobpf.gnn.dataset import load_pickled_graphs
+from neurobpf.gnn.dataset import load_pickled_graphs, split_by_run
 from neurobpf.gnn.detect import annotate as annotate_graphs
 from neurobpf.gnn.detect import evaluate
 from neurobpf.gnn.features import FEAT_DIM
@@ -59,18 +59,28 @@ def _normal_graphs(graphs, run_types):
     return normal if normal else graphs
 
 
+def _val_normal(graphs, run_types, seed):
+    normal = _normal_graphs(graphs, run_types)
+    if not normal:
+        return []
+    train, val, _ = split_by_run(normal, seed=seed)
+    return val if val else train
+
+
 def _train_command(args):
     graphs, run_types, _ = load_pickled_graphs(args.graphs)
     normal = _normal_graphs(graphs, run_types)
+    train, val, _ = split_by_run(normal, seed=args.seed)
     model = train_gae(
-        normal,
+        train,
+        val_graphs=val,
         hidden_dim=args.hidden_dim,
         z_dim=args.z_dim,
         epochs=args.epochs,
         seed=args.seed,
     )
     save_model(args.out, model, {"source": str(args.graphs), "seed": args.seed})
-    return model, normal
+    return model, val
 
 
 def _cmd_train(args):
@@ -80,7 +90,7 @@ def _cmd_train(args):
 def _cmd_detect(args):
     graphs, run_types, _ = load_pickled_graphs(args.graphs)
     model = load_model(args.model, in_dim=FEAT_DIM)
-    threshold = compute_threshold(model, _normal_graphs(graphs, run_types))
+    threshold = compute_threshold(model, _val_normal(graphs, run_types, 0))
     result = evaluate(model, graphs, run_types, threshold)
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -90,7 +100,7 @@ def _cmd_detect(args):
 def _cmd_annotate(args):
     graphs, run_types, run_ids = load_pickled_graphs(args.graphs)
     model = load_model(args.model, in_dim=FEAT_DIM)
-    threshold = compute_threshold(model, _normal_graphs(graphs, run_types))
+    threshold = compute_threshold(model, _val_normal(graphs, run_types, 0))
     entries = annotate_graphs(model, graphs, run_ids, run_types, threshold)
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -111,15 +121,17 @@ def _cmd_demo(args):
     _build_pickle(seed_dir, pkl)
     graphs, run_types, run_ids = load_pickled_graphs(pkl)
     normal = _normal_graphs(graphs, run_types)
+    train, val, _ = split_by_run(normal, seed=args.seed)
     model = train_gae(
-        normal,
+        train,
+        val_graphs=val,
         hidden_dim=args.hidden_dim,
         z_dim=args.z_dim,
         epochs=args.epochs,
         seed=args.seed,
     )
     save_model(out / "model.pt", model, {"source": str(pkl), "seed": args.seed})
-    threshold = compute_threshold(model, normal)
+    threshold = compute_threshold(model, val or train)
     attack = [(g, t, r) for g, t, r in zip(graphs, run_types, run_ids) if t == "attack"]
     if not attack:
         attack = [(g, t, r) for g, t, r in zip(graphs, run_types, run_ids)]

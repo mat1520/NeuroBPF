@@ -1,6 +1,7 @@
 import pickle
 from pathlib import Path
 
+import numpy as np
 import torch
 
 from neurobpf.gnn.features import GraphTensor, snapshot_to_graph
@@ -39,3 +40,20 @@ def load_pickled_graphs(path: Path):
 
 def normalize_x(x):
     return x
+
+
+def split_by_run(graphs, train_frac=0.6, val_frac=0.2, seed=0):
+    rng = np.random.default_rng(seed)
+    runs = sorted({g.run_id for g in graphs})
+    rng.shuffle(runs)
+    if not runs:
+        return [], [], []
+    n_train = max(1, int(round(len(runs) * train_frac)))
+    n_val = max(0, int(round(len(runs) * val_frac)))
+    train_runs = set(runs[:n_train])
+    val_runs = set(runs[n_train : n_train + n_val])
+    test_runs = set(runs[n_train + n_val :])
+    train = [g for g in graphs if g.run_id in train_runs]
+    val = [g for g in graphs if g.run_id in val_runs]
+    test = [g for g in graphs if g.run_id in test_runs]
+    return train, val, test
