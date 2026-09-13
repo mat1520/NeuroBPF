@@ -55,7 +55,7 @@ def snapshot_to_graph(snap: Snapshot, snapshot_id: int = 0) -> GraphTensor:
     for i, nid in enumerate(node_ids):
         node = snap.nodes[nid]
         x[i, :3] = torch.tensor(KIND_ONE_HOT.get(node.kind, (0.0, 0.0, 0.0)))
-        x[i, 3] = 1.0 if node.uid == 0 else 0.0
+        x[i, 3] = 1.0 if node.kind == "process" and node.uid == 0 else 0.0
         x[i, 4] = in_deg[i] / max_in
         x[i, 5] = out_deg[i] / max_out
         for j in range(len(EDGE_TYPES)):

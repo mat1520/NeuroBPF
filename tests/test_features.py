@@ -60,11 +60,13 @@ def test_kind_one_hot():
     assert kinds[5].tolist() == [0.0, 0.0, 1.0]
 
 
-def test_is_root():
+def test_is_root_only_for_root_process_nodes():
     g = snapshot_to_graph(_snapshot())
     assert g.x[0, 3].item() == 0.0
     assert g.x[1, 3].item() == 1.0
-    assert g.x[2, 3].item() == 1.0
+    assert g.x[2, 3].item() == 0.0
+    assert g.x[4, 3].item() == 0.0
+    assert g.x[5, 3].item() == 0.0
 
 
 def test_degree_norms():
