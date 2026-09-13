@@ -12,10 +12,11 @@ def test_process_chain_exec_edges():
     ]
     snap = build_snapshots(events)[-1]
     exec_edges = {(e.src, e.dst) for e in snap.edges if e.label == "EXEC"}
+    assert ("p:1", "p:100") in exec_edges
     assert ("p:100", "p:101") in exec_edges
     assert ("p:101", "p:102") in exec_edges
     assert all(n.kind == "process" for n in snap.nodes.values())
-    assert set(snap.nodes) == {"p:100", "p:101", "p:102"}
+    assert set(snap.nodes) == {"p:1", "p:100", "p:101", "p:102"}
 
 
 def test_no_exec_edge_when_parent_absent():

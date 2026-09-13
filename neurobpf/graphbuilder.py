@@ -67,18 +67,20 @@ class _Builder:
             self.add_node(f"p:{pid}", "process", e.comm, e)
             if e.ppid > 0:
                 parent = f"p:{e.ppid}"
-                if parent in self.registry:
-                    self.add_edge(parent, f"p:{pid}", "EXEC", e.ts)
+                self.add_node(parent, "process", f"pid {e.ppid}", e)
+                self.add_edge(parent, f"p:{pid}", "EXEC", e.ts)
             self.touch(f"p:{pid}", pid)
         elif e.event in ("file_read", "file_write", "file_unlink"):
             node = f"f:{e.target}"
             self.add_node(node, "file", str(e.target), e)
+            self.ensure_process(e)
             self.touch(node, pid)
             label = {"file_read": "READ", "file_write": "WRITE", "file_unlink": "UNLINK"}[e.event]
             self.add_edge(f"p:{pid}", node, label, e.ts)
         elif e.event == "file_rename":
             new_node = f"f:{e.target}"
             self.add_node(new_node, "file", str(e.target), e)
+            self.ensure_process(e)
             self.touch(new_node, pid)
             self.add_edge(f"p:{pid}", new_node, "WRITE", e.ts)
             if e.exe_path:
@@ -89,9 +91,15 @@ class _Builder:
         elif e.event in ("net_connect", "net_accept"):
             node = f"n:{e.target}"
             self.add_node(node, "net", str(e.target), e)
+            self.ensure_process(e)
             self.touch(node, pid)
             label = "CONNECT" if e.event == "net_connect" else "ACCEPT"
             self.add_edge(f"p:{pid}", node, label, e.ts)
+
+    def ensure_process(self, e: Event):
+        nid = f"p:{e.pid}"
+        if nid not in self.registry:
+            self.add_node(nid, "process", e.comm or f"pid {e.pid}", e)
 
     def snapshot(self, window_start):
         return Snapshot(
