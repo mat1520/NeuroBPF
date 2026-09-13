@@ -103,12 +103,18 @@ def _group_run_metrics(scores_by_graph, graphs):
     run_labels = []
     per_run = {}
     for rid, idxs in runs.items():
-        rows = np.stack([np.asarray(scores_by_graph[i]) for i in idxs])
-        score = np.max(rows, axis=0)
-        labels = np.any(
-            np.stack([np.asarray(graphs[i].malicious, dtype=bool) for i in idxs]),
-            axis=0,
-        )
+        rid_scores = {}
+        rid_labels = {}
+        for i in idxs:
+            g = graphs[i]
+            s = np.asarray(scores_by_graph[i])
+            for nid, sc, lab in zip(g.node_ids, s, np.asarray(g.malicious, dtype=bool)):
+                if nid not in rid_scores or sc > rid_scores[nid]:
+                    rid_scores[nid] = sc
+                rid_labels[nid] = rid_labels.get(nid, False) or bool(lab)
+        order = list(rid_scores)
+        score = np.asarray([rid_scores[n] for n in order])
+        labels = np.asarray([rid_labels[n] for n in order], dtype=bool)
         run_scores.append(score)
         run_labels.append(labels)
         if labels.sum() > 0:

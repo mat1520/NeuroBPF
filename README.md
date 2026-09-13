@@ -34,6 +34,58 @@ Los datos reales (eBPF) y los sintéticos comparten el mismo esquema NDJSON, por
 - **Umbral**: percentil 99 de la distribución de scores **normalizados (z-score por run)** de los runs normales de entrenamiento. Nodo cuyo z-score supera el umbral → anómalo. La normalización por run hace el umbral invariante a la escala del grafo (un run de ataque acumulado no marca todo el grafo).
 - **Métricas**: AUC ROC y recall@top-k por run, con el score de anomalía calculado sobre datos de ataque no vistos.
 
+## Prototipo de investigación
+
+Protocolo experimental con métricas de la literatura sobre el detector GNN, reproducible con un
+solo comando sobre el dataset sintético **o** sobre los eventos del benchmark **THEIA_E3**
+(DARPA Transparent Computing, escenario E3, kernel 3.15/4.4/4.19 de 64 bits).
+
+### Snapshot con validación limpia
+
+- `_build_pickle(events_dir, out, window=5.0)` conserva **todas** las ventanas temporales
+  acumulativas de cada run (antes solo se retenía la última).
+- `GraphTensor.run_id` etiqueta cada ventana con su run; las métricas de run se agrupan por
+  `run_id` (pooling por nodo: score máx. y etiqueta any-malicioso).
+- Split **train/val/test por run** (`split_by_run`, 60/20/20): el autoencoder se entrena solo con
+  runs normales, el umbral se calibra en el conjunto de **validación** y el modelo jamás evalúa con
+  datos de entrenamiento (se eliminó el antiguo escape `train_graphs[-1]`).
+
+### Métricas de paper
+
+`run_level_evaluate` reporta, sobre la concatenación de los nodos agrupados por run:
+
+- AUC ROC + precision@1 %, recall @1 % y @5 %, nDCG@5 %.
+- FPR@presupuesto (1/5/10), es decir, el coste en falsos positivos por nodo inspeccionado
+  necesario para capturar a todos los atacantes.
+- Informe de umbral (TP/FP/FN/TN, TPR, FPR) y recall por run.
+
+### Baselines y ablación
+
+`neurobpf/gnn/baselines.py` (solo features, sin topología):
+
+- **OCSVM** (`nu=0.1`) — anomalía con kernel sobre los descriptores de nodo.
+- **MLP autoencoder** — reconstrucción con cuello de botella (error MSE como score).
+
+`neurobpf/gnn/ablation.py` — **ablación de topología**: permutación determinista de las aristas
+(`shuffled_graphs`). Cuantificar cuánto aporta el grafo de procedencia frente a solo features.
+
+### Reproducción
+
+```bash
+# Tabla multi-seed (por defecto 5 seeds): GNN vs GNN-shuffled vs OCSVM vs MLP-autoencoder
+python -m neurobpf.cli compare --graphs data/graphs.pkl --out data/report.json --seeds 5 --epochs 300
+
+# Con el pipeline end-to-end sobre la demo sintética
+python -m neurobpf.cli demo --out data --seed 7 --normal 6 --attack 3
+```
+
+### THEIA_E3 / DARPA TC
+
+`neurobpf/benchmark/theia.py` convierte los registros JSONL de THEIA_E3 al esquema NDJSON del
+pipeline (mismo formato que el colector eBPF y el motor sintético). Las etiquetas
+(`theia_ground_truth_to_pids`) se traducen a `malicious_pids` por run para construir el dataset de
+evaluación; la lectura del escenario queda fuera del paquete por tamaño (~12 GB).
+
 ## Repositorio
 
 ```
@@ -42,8 +94,9 @@ neurobpf/        Pipeline Python: eventos, construcción de grafos, escenarios, 
   events.py        esquema canónico + I/O NDJSON
   graphbuilder.py  snapshots de procedencia temporales
   scenarios.py     simulador normal + 5 escenarios de ataque
-  cli.py           subcomandos generate / build / train / detect / annotate / demo / serve
-  gnn/             features, model (GAE), dataset, train, detect
+  cli.py           subcomandos generate / build / train / detect / annotate / demo / serve / compare
+  gnn/             features, model (GAE), dataset, train, detect, baselines, ablation
+  benchmark/       adapter del benchmark THEIA_E3 (DARPA TC)
   server.py        FastAPI + WebSocket de replay
 web/             Frontend Vite + React: grafo 2D/3D (react-force-graph) en vivo
 tests/           Suite pytest del pipeline completo

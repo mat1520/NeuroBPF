@@ -174,6 +174,34 @@ def test_run_level_evaluate_groups_by_run_id():
     assert set(res["threshold_report"]) == {"tp", "fp", "fn", "tn", "tpr", "fpr"}
 
 
+def test_group_run_metrics_tolerates_varying_snapshot_sizes():
+    from neurobpf.gnn.detect import _group_run_metrics
+
+    g0 = _graph(
+        [[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 2,
+        [[0, 1]],
+        ["hub", "leaf"],
+        [False, False],
+        0,
+    )
+    g1 = _graph(
+        [[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 3,
+        [[0, 1], [1, 2]],
+        ["hub", "leaf", "mal"],
+        [False, False, True],
+        1,
+    )
+    g0.run_id = "r0"
+    g1.run_id = "r0"
+    scores, labels, per_run = _group_run_metrics([[0.1, 0.4], [0.1, 0.3, 0.99]], [g0, g1])
+    assert scores[2] == 0.99
+    assert labels[2]
+    assert per_run["r0"] == 1.0
+    merged = {n: (s, l) for n, s, l in zip(["hub", "leaf", "mal"], scores.tolist(), labels.tolist())}
+    assert merged["leaf"][0] == 0.4
+    assert not merged["leaf"][1]
+
+
 def test_annotate_global_shift_not_flagged_as_anomalous():
     g = _graph(
         [[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]] * 4,
