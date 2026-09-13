@@ -3,10 +3,20 @@ import json
 import pickle
 from pathlib import Path
 
+import numpy as np
+
 from neurobpf.events import read_events
+from neurobpf.gnn.ablation import shuffled_graphs
+from neurobpf.gnn.baselines import mlp_ae_scores, ocsvm_scores
 from neurobpf.gnn.dataset import load_pickled_graphs, split_by_run
-from neurobpf.gnn.detect import annotate as annotate_graphs
-from neurobpf.gnn.detect import evaluate
+from neurobpf.gnn.detect import (
+    _group_run_metrics,
+    _paper_metrics,
+    annotate as annotate_graphs,
+    evaluate,
+    run_level_evaluate,
+    threshold_report,
+)
 from neurobpf.gnn.features import FEAT_DIM
 from neurobpf.gnn.train import compute_threshold, load_model, save_model, train_gae
 from neurobpf.graphbuilder import build_snapshots
@@ -152,6 +162,78 @@ def _cmd_demo(args):
         ))
 
 
+def compare(graphs_path, out_path, seeds=5, hidden_dim=128, z_dim=128, epochs=300):
+    graphs, run_types, run_ids = load_pickled_graphs(graphs_path)
+    per_seed = []
+    for seed in range(seeds):
+        train_all, val_all, test = split_by_run(graphs, seed=seed)
+        model = train_gae(
+            train_all,
+            val_graphs=val_all,
+            hidden_dim=hidden_dim,
+            z_dim=z_dim,
+            epochs=epochs,
+            seed=seed,
+        )
+        thr = compute_threshold(model, val_all)
+        gnn = run_level_evaluate(model, test, thr)
+        shuff_model = train_gae(
+            shuffled_graphs(train_all, seed=seed),
+            val_graphs=shuffled_graphs(val_all, seed=seed),
+            hidden_dim=hidden_dim,
+            z_dim=z_dim,
+            epochs=epochs,
+            seed=seed,
+        )
+        gnn_shuffled = run_level_evaluate(shuff_model, test, thr)
+        for name, m in (("gnn", gnn), ("gnn_shuffled", gnn_shuffled)):
+            per_seed.append(_row(seed, name, m))
+        for name, score_fn in (("ocsvm", ocsvm_scores), ("mlp_ae", mlp_ae_scores)):
+            scores_by_graph = [score_fn(g.x.numpy()) for g in test]
+            sc, lab, _ = _group_run_metrics(scores_by_graph, test)
+            per_seed.append(_row(seed, name, _paper_metrics(sc, lab)))
+    summary = _summarize(per_seed)
+    Path(out_path).parent.mkdir(parents=True, exist_ok=True)
+    with Path(out_path).open("w") as fh:
+        json.dump({"per_seed": per_seed, "summary": summary}, fh, indent=2)
+
+
+def _row(seed, method, m):
+    return {
+        "seed": seed,
+        "method": method,
+        "auc_roc": m["auc_roc"],
+        "recall_at_1pct": m["recall_at_1pct"],
+        "recall_at_5pct": m["recall_at_5pct"],
+        "ndcg_at_5pct": m["ndcg_at_5pct"],
+        "fpr_budget_5": m["fpr_budget_5"],
+    }
+
+
+def _summarize(per_seed):
+    rows = {}
+    metrics = ("auc_roc", "recall_at_1pct", "recall_at_5pct", "ndcg_at_5pct", "fpr_budget_5")
+    for method in {row["method"] for row in per_seed}:
+        for metric in metrics:
+            values = [row[metric] for row in per_seed if row["method"] == method]
+            rows[f"{method} {metric}"] = {
+                "mean": float(np.mean(values)),
+                "std": float(np.std(values)),
+            }
+    return rows
+
+
+def _cmd_compare(args):
+    compare(
+        args.graphs,
+        args.out,
+        seeds=args.seeds,
+        hidden_dim=args.hidden_dim,
+        z_dim=args.z_dim,
+        epochs=args.epochs,
+    )
+
+
 def _cmd_serve(args):
     import uvicorn
 
@@ -214,6 +296,12 @@ def main(argv=None):
     srv.add_argument("--port", type=int, default=8899)
     srv.add_argument("--delay", type=float, default=0.7)
     srv.set_defaults(func=_cmd_serve)
+    cmp = sub.add_parser("compare", help="multi-seed experiment table (GNN vs baselines vs ablations)")
+    cmp.add_argument("--graphs", required=True, help="pickled graph dataset")
+    cmp.add_argument("--out", required=True, help="output report JSON path")
+    cmp.add_argument("--seeds", type=int, default=5)
+    _add_train_args(cmp)
+    cmp.set_defaults(func=_cmd_compare)
     args = parser.parse_args(argv)
     args.func(args)
 

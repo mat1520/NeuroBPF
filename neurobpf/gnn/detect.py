@@ -118,14 +118,12 @@ def _group_run_metrics(scores_by_graph, graphs):
     return scores, labels, per_run
 
 
-def run_level_evaluate(model, graphs, threshold):
-    scores_by_graph = [node_anomaly_scores(model, g) for g in graphs]
-    scores, labels, per_run = _group_run_metrics(scores_by_graph, graphs)
+def _paper_metrics(scores, labels):
     n_total = len(scores)
     k1 = max(int(round(n_total * 0.01)), 1)
     k5 = max(int(round(n_total * 0.05)), 1)
     return {
-        "auc_roc": _roc_auc(scores, labels),
+        "auc_roc": float(_roc_auc(scores, labels)),
         "recall_at_1pct": recall_at_k(scores, labels, k1),
         "recall_at_5pct": recall_at_k(scores, labels, k5),
         "precision_at_1pct": precision_at_k(scores, labels, k1),
@@ -133,11 +131,18 @@ def run_level_evaluate(model, graphs, threshold):
         "fpr_budget_1": fpr_at_budget(scores, labels, 1),
         "fpr_budget_5": fpr_at_budget(scores, labels, 5),
         "fpr_budget_10": fpr_at_budget(scores, labels, 10),
-        "threshold_report": threshold_report(scores, labels, threshold),
-        "per_run_recall": per_run,
-        "n_runs": len({g.run_id for g in graphs}),
-        "n_pos": int(labels.sum()),
     }
+
+
+def run_level_evaluate(model, graphs, threshold):
+    scores_by_graph = [node_anomaly_scores(model, g) for g in graphs]
+    scores, labels, per_run = _group_run_metrics(scores_by_graph, graphs)
+    res = _paper_metrics(scores, labels)
+    res["threshold_report"] = threshold_report(scores, labels, threshold)
+    res["per_run_recall"] = per_run
+    res["n_runs"] = len({g.run_id for g in graphs})
+    res["n_pos"] = int(labels.sum())
+    return res
 
 
 def evaluate(model, graphs, run_types, threshold):
