@@ -5,10 +5,16 @@ requires-python = ">=3.12"
 dependencies = [
     "numpy>=1.26",
     "torch>=2.10",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.32",
+    "websockets>=13",
 ]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
+
+[tool.setuptools.packages.find]
+include = ["neurobpf*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
