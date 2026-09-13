@@ -48,16 +48,25 @@ function nodeColor(node) {
   return kind.color;
 }
 
-function toGraphData(frame) {
+function toGraphData(frame, onlyAnomalies, searchText) {
   if (!frame) return { nodes: [], links: [] };
+  let nodes = frame.nodes || [];
+  if (onlyAnomalies) nodes = nodes.filter((n) => n.anomalous);
+  if (searchText) {
+    const q = searchText.toLowerCase();
+    nodes = nodes.filter((n) => (nodeLabel(n) || n.id).toLowerCase().includes(q));
+  }
+  const ids = new Set(nodes.map((n) => n.id));
   return {
-    nodes: (frame.nodes || []).map((n) => ({ ...n, displayLabel: nodeLabel(n) })),
-    links: (frame.edges || []).map((e) => ({
-      source: e.src,
-      target: e.dst,
-      label: e.label,
-      color: EDGE_COLORS[e.label] || '#64748b',
-    })),
+    nodes: nodes.map((n) => ({ ...n, displayLabel: nodeLabel(n) })),
+    links: (frame.edges || [])
+      .filter((e) => ids.has(e.src) && ids.has(e.dst))
+      .map((e) => ({
+        source: e.src,
+        target: e.dst,
+        label: e.label,
+        color: EDGE_COLORS[e.label] || '#64748b',
+      })),
   };
 }
 
@@ -174,8 +183,8 @@ function textSprite(text, anomalous) {
   return sprite;
 }
 
-export default function GraphView({ frame, mode, onSelect, selected }) {
-  const graphData = useMemo(() => toGraphData(frame), [frame]);
+export default function GraphView({ frame, mode, onSelect, selected, onlyAnomalies = false, searchText = '' }) {
+  const graphData = useMemo(() => toGraphData(frame, onlyAnomalies, searchText), [frame, onlyAnomalies, searchText]);
   const graphRef = useRef();
   const reduced = usePrefersReducedMotion();
   const selectedId = selected?.id;
