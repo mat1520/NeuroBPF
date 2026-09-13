@@ -131,6 +131,22 @@ def _cmd_demo(args):
     for entry in entries:
         (ann_dir / f"{entry['run_id']}.json").write_text(json.dumps(entry, indent=2))
     print(f"AUC {result['auc_roc']:.2f} | recall@k {result['recall_at_topk']:.2f}")
+    if args.serve:
+        _cmd_serve(argparse.Namespace(
+            annotated=str(ann_dir), web=str(args.web or "web/dist"),
+            port=args.port, delay=args.delay,
+        ))
+
+
+def _cmd_serve(args):
+    import uvicorn
+
+    from neurobpf.server import create_app
+
+    annotated_dir = Path(args.annotated)
+    web_dir = Path(args.web) if args.web else None
+    app = create_app(annotated_dir, loop_delay=args.delay, web_dir=web_dir)
+    uvicorn.run(app, host="127.0.0.1", port=args.port)
 
 
 def _add_train_args(parser):
@@ -168,12 +184,22 @@ def main(argv=None):
     ann.add_argument("--model", required=True, help="trained model path")
     ann.add_argument("--out", required=True, help="output directory")
     ann.set_defaults(func=_cmd_annotate)
-    dem = sub.add_parser("demo", help="end-to-end generate/train/detect/annotate demo")
+    dem = sub.add_parser("demo", help="end-to-end generate/train/detect/annotate/serve demo")
     dem.add_argument("--out", required=True, help="output directory")
     dem.add_argument("--normal", type=int, default=6)
     dem.add_argument("--attack", type=int, default=3)
+    dem.add_argument("--serve", action="store_true", help="serve the annotated replay over web")
+    dem.add_argument("--web", default="web/dist", help="path to built frontend (default web/dist)")
+    dem.add_argument("--port", type=int, default=8899)
+    dem.add_argument("--delay", type=float, default=0.7)
     _add_train_args(dem)
     dem.set_defaults(func=_cmd_demo)
+    srv = sub.add_parser("serve", help="serve annotated replay + frontend on a local port")
+    srv.add_argument("--annotated", required=True, help="directory of annotated run JSON files")
+    srv.add_argument("--web", default=None, help="path to built frontend (optional)")
+    srv.add_argument("--port", type=int, default=8899)
+    srv.add_argument("--delay", type=float, default=0.7)
+    srv.set_defaults(func=_cmd_serve)
     args = parser.parse_args(argv)
     args.func(args)
 
