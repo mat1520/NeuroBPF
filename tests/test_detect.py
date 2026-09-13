@@ -5,7 +5,13 @@ from neurobpf.gnn.detect import (
     _roc_auc,
     annotate,
     evaluate,
+    fpr_at_budget,
+    ndcg_at_k,
     node_anomaly_scores,
+    precision_at_k,
+    recall_at_k,
+    run_level_evaluate,
+    threshold_report,
 )
 from neurobpf.gnn.features import FEAT_DIM, GraphTensor
 
@@ -122,6 +128,50 @@ def test_evaluate_single_class_auc_safe():
     model = FakeModel([[0.1, 0.2]])
     res = evaluate(model, [g], ["normal"], 0.5)
     assert res["auc_roc"] == 1.0
+
+
+def test_precision_and_recall_at_k():
+    scores = [0.9, 0.8, 0.7, 0.3]
+    labels = [True, False, True, False]
+    assert precision_at_k(scores, labels, 2) == 0.5
+    assert recall_at_k(scores, labels, 2) == 0.5
+
+
+def test_ndcg_at_k():
+    scores = [0.9, 0.8, 0.7, 0.3, 0.2]
+    labels = [False, True, True, False, True]
+    k = 3
+    order = np.argsort(scores)[::-1][:k]
+    ranks = [labels[i] for i in order]
+    ideal = sorted(labels, reverse=True)[:k]
+    dcg = sum(g / np.log2(i + 2) for i, g in enumerate(ranks))
+    idcg = sum(g / np.log2(i + 2) for i, g in enumerate(ideal))
+    assert abs(ndcg_at_k(scores, labels, k) - dcg / idcg) < 1e-9
+
+
+def test_fpr_at_budget():
+    scores = [0.9, 0.8, 0.7, 0.6, 0.1]
+    labels = [True, False, False, True, False]
+    assert abs(fpr_at_budget(scores, labels, 2) - 1.0 / 3.0) < 1e-9
+    assert abs(fpr_at_budget(scores, labels, 4) - 2.0 / 3.0) < 1e-9
+
+
+def test_threshold_report_counts():
+    scores = [0.9, 0.8, 0.3, 0.2]
+    labels = [True, False, True, False]
+    rep = threshold_report(scores, labels, 0.5)
+    assert rep == {"tp": 1, "fp": 1, "fn": 1, "tn": 1, "tpr": 0.5, "fpr": 0.5}
+
+
+def test_run_level_evaluate_groups_by_run_id():
+    graphs, scores = _eval_inputs()
+    for g, r in zip(graphs, ["a", "b", "b"]):
+        g.run_id = r
+    model = _fake_model_for(graphs, scores)
+    res = run_level_evaluate(model, graphs, threshold=0.5)
+    assert res["n_runs"] == 2
+    assert "auc_roc" in res
+    assert set(res["threshold_report"]) == {"tp", "fp", "fn", "tn", "tpr", "fpr"}
 
 
 def test_annotate_global_shift_not_flagged_as_anomalous():
