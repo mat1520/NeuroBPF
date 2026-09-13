@@ -16,6 +16,8 @@ export default function Timeline({ points, selectedIndex, onScrub }) {
   const yScore = (s) => PAD.top + plotH - (s / maxScore) * plotH * 0.85;
   const yAnom = () => PAD.top + 6;
 
+  const nearRightEdge = (i, list) => x(i) + 90 > W - PAD.right;
+
   const xToIndex = (px) => {
     const t = Math.max(0, Math.min(1, (px - PAD.left) / plotW));
     return Math.round(t * (points.length - 1));
@@ -85,7 +87,12 @@ export default function Timeline({ points, selectedIndex, onScrub }) {
         ))}
         <line x1={x(focus)} y1={PAD.top} x2={x(focus)} y2={PAD.top + plotH} className="timeline-cursor" aria-hidden="true" />
         {focusPoint && (
-          <text x={Math.min(W - PAD.right, x(focus) + 4)} y={PAD.top - 2} className="timeline-readout" textAnchor="start">
+          <text
+            x={nearRightEdge(focus, points, PAD, W) ? W - PAD.right : Math.min(W - PAD.right - 4, x(focus) + 4)}
+            y={PAD.top - 2}
+            textAnchor={nearRightEdge(focus, points, PAD, W) ? 'end' : 'start'}
+            className="timeline-readout"
+          >
             t={focusPoint.ts.toFixed(1)} · score {focusPoint.maxScore.toFixed(2)} · {focusPoint.nAnomalous} anómalos
           </text>
         )}
