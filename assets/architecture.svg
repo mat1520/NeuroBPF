@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="360" viewBox="0 0 900 360" role="img">
+  <rect width="900" height="360" fill="#0f172a"/>
+  <text x="28" y="34" fill="#f8fafc" font-size="15" font-weight="600" font-family="Fira Code, ui-monospace, monospace">Pipeline NeuroBPF</text>
+  <text x="28" y="56" fill="#94a3b8" font-size="11" font-family="Fira Code, ui-monospace, monospace">de los eventos del kernel al veredicto por run</text>
+
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#64748b"/>
+    </marker>
+  </defs>
+
+  <g font-family="Fira Code, ui-monospace, monospace">
+    <rect x="180" y="84" width="540" height="64" rx="8" fill="#1b2336" stroke="#334155"/>
+    <text x="200" y="110" fill="#22d3ee" font-size="13" font-weight="600">eBPF · registros del kernel</text>
+    <text x="200" y="132" fill="#94a3b8" font-size="11">eventos de procedencia (exec · read · write · connect · unlink)</text>
+    <line x1="450" y1="148" x2="450" y2="176" stroke="#64748b" marker-end="url(#arr)"/>
+
+    <rect x="180" y="178" width="540" height="64" rx="8" fill="#1b2336" stroke="#334155"/>
+    <text x="200" y="204" fill="#22d3ee" font-size="13" font-weight="600">Grafo de procedencia</text>
+    <text x="200" y="226" fill="#94a3b8" font-size="11">nodos por entidad (proceso · archivo · red) · aristas tipificadas · ventanas fijas</text>
+    <line x1="450" y1="242" x2="450" y2="270" stroke="#64748b" marker-end="url(#arr)"/>
+
+    <rect x="180" y="272" width="540" height="64" rx="8" fill="#1b2336" stroke="#334155"/>
+    <text x="200" y="298" fill="#22d3ee" font-size="13" font-weight="600">GCN-AE (autoencoder por grafos)</text>
+    <text x="200" y="320" fill="#94a3b8" font-size="11">FFD disperso · split train/val/test · early stopping por AUC de validación</text>
+    <line x1="450" y1="336" x2="450" y2="364" stroke="#64748b" marker-end="url(#arr)"/>
+
+    <rect x="180" y="366" width="540" height="64" rx="8" fill="#1b2336" stroke="#334155"/>
+    <text x="200" y="392" fill="#22d3ee" font-size="13" font-weight="600">Veredicto y métricas</text>
+    <text x="200" y="414" fill="#94a3b8" font-size="11">score de reconstrucción · umbral sobre validación · AUC · Recall@k · NDCG@5%</text>
+
+    <rect x="760" y="366" width="112" height="64" rx="8" fill="#1b2336" stroke="#22d3ee" stroke-opacity="0.5"/>
+    <text x="816" y="392" fill="#22d3ee" font-size="11" font-weight="600" text-anchor="middle">consola web</text>
+    <text x="816" y="410" fill="#94a3b8" font-size="9" text-anchor="middle">React · 2D/3D</text>
+    <line x1="720" y1="398" x2="760" y2="398" stroke="#64748b" marker-end="url(#arr)"/>
+  </g>
+</svg>
