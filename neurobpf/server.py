@@ -3,7 +3,7 @@ import json
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.staticfiles import StaticFiles
 
 DEFAULT_ANNOTATED_DIR = "annotated"
@@ -16,6 +16,35 @@ def _load_runs(annotated_dir: Path):
         data = json.loads(path.read_text())
         runs.append((data["run_id"], data["run_type"], data["snapshots"]))
     return runs
+
+
+def _discover(base_dir: Path, filename: str):
+    direct = base_dir / filename
+    if direct.is_file():
+        return direct
+    parent = base_dir.parent / filename
+    if parent.is_file():
+        return parent
+    return None
+
+
+def _json_or_404(path):
+    if path is None or not path.is_file():
+        raise HTTPException(status_code=404, detail=f"no such file: {path}")
+    return json.loads(path.read_text())
+
+
+def _snapshot_stats(snap):
+    nodes = snap.get("nodes", [])
+    scores = [n.get("score", 0.0) for n in nodes
+              if isinstance(n.get("score"), (int, float))]
+    return {
+        "ts": snap.get("ts", 0.0),
+        "n_nodes": len(nodes),
+        "n_edges": len(snap.get("edges", [])),
+        "n_anomalous": sum(1 for n in nodes if n.get("anomalous")),
+        "max_score": max(scores) if scores else 0.0,
+    }
 
 
 async def _replay(websocket: WebSocket, runs: list, loop_delay: float) -> None:
@@ -40,12 +69,67 @@ async def _replay(websocket: WebSocket, runs: list, loop_delay: float) -> None:
         index = (index + 1) % len(runs)
 
 
-def create_app(annotated_dir: Path | str, loop_delay: float = 0.7, web_dir: Path | None = None) -> FastAPI:
+def _resolve_file_arg(path_or_file: Path | str | None, filename: str, fallback_dir: Path):
+    if path_or_file is None:
+        return _discover(fallback_dir, filename)
+    p = Path(path_or_file)
+    if p.is_file():
+        return p
+    return _discover(p, filename)
+
+
+def create_app(
+    annotated_dir: Path | str,
+    loop_delay: float = 0.7,
+    web_dir: Path | None = None,
+    detection_path: Path | str | None = None,
+    report_path: Path | str | None = None,
+) -> FastAPI:
     app = FastAPI()
+    base = Path(annotated_dir)
+    detection_file = _resolve_file_arg(detection_path, "detection.json", base)
+    report_file = _resolve_file_arg(report_path, "report.json", base)
 
     @app.get("/health")
     async def health():
         return {"ok": True}
+
+    @app.get("/api/experiment")
+    async def experiment():
+        return _json_or_404(detection_file)
+
+    @app.get("/api/runs")
+    async def runs():
+        rows = []
+        for rid, rtype, snapshots in _load_runs(base):
+            last = snapshots[-1] if snapshots else {}
+            rows.append(
+                {
+                    "id": rid,
+                    "run_type": rtype,
+                    "n_snapshots": len(snapshots),
+                    "n_nodes_final": len(last.get("nodes", [])),
+                    "anomalous_final": sum(1 for n in last.get("nodes", []) if n.get("anomalous")),
+                }
+            )
+        return {"runs": rows}
+
+    @app.get("/api/runs/{run_id}")
+    async def run_detail(run_id: str):
+        runs_by_id = {rid: (rtype, snaps) for rid, rtype, snaps in _load_runs(base)}
+        if run_id not in runs_by_id:
+            raise HTTPException(status_code=404, detail=f"no such run: {run_id}")
+        rtype, snapshots = runs_by_id[run_id]
+        return {
+            "run_id": run_id,
+            "run_type": rtype,
+            "snapshots": snapshots,
+            "stats": [_snapshot_stats(s) for s in snapshots],
+        }
+
+    @app.get("/api/report")
+    async def report():
+        return _json_or_404(report_file)
 
     @app.websocket("/ws/snapshots")
     async def snapshots(websocket: WebSocket):

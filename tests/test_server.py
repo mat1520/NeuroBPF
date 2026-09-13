@@ -118,6 +118,107 @@ def test_ws_reports_error_when_no_runs(tmp_path):
     assert frame == {"error": "no annotated runs"}
 
 
+def _write_detection(directory):
+    p = directory / "detection.json"
+    p.write_text(
+        json.dumps(
+            {
+                "auc_roc": 0.74,
+                "recall_at_topk": 0.5,
+                "per_run_recall": {"run_a": 1.0},
+                "threshold_report": {"tp": 2, "fp": 1, "fn": 1, "tn": 99, "tpr": 0.5, "fpr": 0.01},
+            }
+        )
+    )
+    return p
+
+
+def _write_report(directory):
+    p = directory / "report.json"
+    p.write_text(
+        json.dumps(
+            {
+                "per_seed": [],
+                "summary": {
+                    "gnn auc_roc": {"mean": 0.79, "std": 0.05},
+                    "ocsvm auc_roc": {"mean": 0.55, "std": 0.02},
+                },
+            }
+        )
+    )
+    return p
+
+
+def test_api_experiment_returns_detection(tmp_path, annotated_dir):
+    det = _write_detection(tmp_path)
+    with TestClient(create_app(annotated_dir, loop_delay=0.0, detection_path=det)) as client:
+        res = client.get("/api/experiment")
+    body = res.json()
+    assert body["auc_roc"] == 0.74
+    assert body["recall_at_topk"] == 0.5
+    assert body["threshold_report"]["tpr"] == 0.5
+
+
+def test_api_experiment_404_when_missing(annotated_dir):
+    with TestClient(create_app(annotated_dir, loop_delay=0.0)) as client:
+        res = client.get("/api/experiment")
+    assert res.status_code == 404
+
+
+def test_api_runs_lists_runs(annotated_dir):
+    with TestClient(create_app(annotated_dir, loop_delay=0.0)) as client:
+        res = client.get("/api/runs")
+    runs = res.json()["runs"]
+    assert [r["id"] for r in runs] == ["run_a", "run_b"]
+    assert [r["run_type"] for r in runs] == ["attack", "normal"]
+    assert [r["n_snapshots"] for r in runs] == [2, 3]
+
+
+def test_api_run_detail_returns_snapshots_and_stats(annotated_dir):
+    with TestClient(create_app(annotated_dir, loop_delay=0.0)) as client:
+        res = client.get("/api/runs/run_a")
+    body = res.json()
+    assert body["run_id"] == "run_a"
+    assert len(body["snapshots"]) == 2
+    assert len(body["stats"]) == 2
+    stat = body["stats"][0]
+    assert stat["n_nodes"] == 1
+    assert stat["n_nodes"] == len(body["snapshots"][0]["nodes"])
+    assert stat["n_anomalous"] == 1
+    assert stat["max_score"] == 0.5
+
+
+def test_api_run_missing_returns_404(annotated_dir):
+    with TestClient(create_app(annotated_dir, loop_delay=0.0)) as client:
+        res = client.get("/api/runs/nope")
+    assert res.status_code == 404
+
+
+def test_api_report_returns_series_when_present(tmp_path, annotated_dir):
+    rep = _write_report(tmp_path)
+    with TestClient(create_app(annotated_dir, loop_delay=0.0, report_path=rep)) as client:
+        res = client.get("/api/report")
+    body = res.json()
+    assert body["summary"]["gnn auc_roc"]["mean"] == 0.79
+    assert body["summary"]["ocsvm auc_roc"]["std"] == 0.02
+
+
+def test_api_report_404_when_missing(annotated_dir):
+    with TestClient(create_app(annotated_dir, loop_delay=0.0)) as client:
+        res = client.get("/api/report")
+    assert res.status_code == 404
+
+
+def test_detection_discovered_in_parent_dir(tmp_path, annotated_dir):
+    _write_detection(tmp_path)
+    annotated = tmp_path / "annotations"
+    annotated.mkdir()
+    with TestClient(create_app(annotated, loop_delay=0.0)) as client:
+        res = client.get("/api/experiment")
+    assert res.status_code == 200
+    assert res.json()["auc_roc"] == 0.74
+
+
 def test_module_entry_serves_health_on_configured_port(tmp_path):
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
